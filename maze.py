@@ -3,6 +3,7 @@ from operator import add
 import numpy as np
 import time
 from shapely.geometry import Polygon,Point
+import math
 
 '''
 Custom data type to store each node
@@ -199,5 +200,13 @@ class Maze:
     def _is_in_hexagon(self,center=(200,100),side=35):
         return False
         pass
-
-
+    
+    def update_maze_arrow(self):
+        coords = Maze.arrow_obstacle.buffer(5).boundary.coords[:]
+        cords = Maze.arrow_obstacle.exterior.coords.xy
+        for i in coords:
+            i = self.cartisian_to_idx(i)
+            f = math.floor(i)
+            c = math.ceil(i)
+            self.__maze[f] = None
+            self.__maze[c] = None
