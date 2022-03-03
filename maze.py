@@ -4,6 +4,7 @@ import numpy as np
 import time
 from shapely.geometry import Polygon,Point
 import math
+from queue import PriorityQueue
 
 from sympy import true
 
@@ -16,7 +17,7 @@ class Node:
 
     '''set the position of the state'''
     def set_position(self,position = np.zeros([1,2])):
-        self.__attrdict['position'] = position
+        self.__attrdict['position'] = np.array(position)
     '''Get the position of the current node'''
     def get_position(self):
         return self.__attrdict['position'] 
@@ -27,6 +28,9 @@ class Node:
     def get_is_visited(self):
         return self.__attrdict['is_visited'] 
 
+    def set_node_parameters(self,dict):
+        for keys in dict.keys():
+            self.__attrdict[keys] = dict[keys]
     '''Get the index of the parent'''
     def get_parent(self):
         return self.__attrdict['parent']
@@ -39,7 +43,6 @@ class Node:
         self.__attrdict['cost'] = cost
     def get_cost(self):
         return self.__attrdict['cost']
-
 
     '''Get cartisian coordinates of each node'''
     def get_cartisian(self):
@@ -66,7 +69,10 @@ class Node:
 class Maze:
     arrow_obstacle = Polygon([(115,210),(80,180),(105,100),(36,185)]) ##The arrow polygon obstacle
     circle = Point((300,185)).buffer(40)
-    action_set = {'u':[-1,0],'d':[1,0],'l':[0,-1],'r':[0,1],'ul':[-1,-1],'ur':[-1,1],'dl':[1,-1],'dr':[1,1]} ##action set dict, used to append add to the current index
+    action_set = {'u':np.array([-1,0]),'d':np.array([1,0]),\
+                  'l':np.array([0,-1]),'r':np.array([0,1]),\
+                  'ul':np.array([-1,-1]),'ur':np.array([-1,1]),\
+                  'dl':np.array([1,-1]),'dr':np.array([1,1])} ##action set dict, used to append add to the current index
     lim_x = 249## xlimit in terms of array
     lim_y = 399## Y limit in terms of array
     def __init__(self,padding = 5,radius = 0,cost:dict = {'u':1,'d':1,'l':1,'r':1,'ur':1.4,'ul':1.4,'dr':1.4,'dl':1.4}) -> None:
@@ -75,7 +81,7 @@ class Maze:
                                ,dtype=Node) ##Empty np array with X*Y Node objects
         self.__cost = cost              ## Cost for each action
         self.__padding = padding+radius ##padding for the robot
-        self.__open_list = []           ##Open list containing the accessable nodes
+        self.__open_list = PriorityQueue()           ##Open list containing the accessable nodes
         self.__close_list = []          ##closed list containing the visited nodes
         self.path = []
         self.start_goal = []
@@ -85,31 +91,39 @@ class Maze:
         goal = self.cartisian_to_idx(list(goal))
         self.start_goal.append(start)
         self.start_goal.append(goal)
+        self.update_maze_arrow()
+        self.update_maze_circle()
         ## Check if the start and goal are accessable
-        if(not self.point_not_in_obstacle(start)):
+        if(type(self.__maze[start])==None):
             print("Start inside a Obstacle")
             return False
-        if(not self.point_not_in_obstacle(goal)):
+        if(type(self.__maze[goal])==None):
             print("Goal inside a Obstacle")
             return False
         ## Set the cost of the start node to zero
         self.__maze[start].set_cost(0)
         ## Apppend the start node and end node into list
-        self.__open_list.append(self.__maze[start])
-        self.__open_list.append(self.__maze[goal])
+        self.__open_list.put(self.__maze[start])
+        self.__open_list.put(self.__maze[goal])
         ##sort list, look around, pop open list and append to closed list
         while True:
             # sort the open list so that lowest cost in at idx 0
-            self.__open_list.sort()
+            # self.__open_list.sort()
             # print("Open : ",self.__open_list,list(map(Node.get_cost,self.__open_list)))
             # look around the first node in the open list
-            print(self.__open_list[0].get_position())
-            self.look_around(self.__open_list[0].get_position())
-            # Add the first node to the closed list and pop it from open list
-            self.__close_list.append(self.__open_list[0])
-            self.__open_list.pop(0)
-            if(self.__maze[self.start_goal[-1]].get_cost()<self.__open_list[0].get_cost()):
+            NoI = self.__open_list.get()
+            NoI.set_is_visited()
+            if(self.__maze[self.start_goal[-1]].get_cost()<NoI.get_cost()):
+                print("Found the shortest path")
                 break
+            if(self.__open_list.empty()):
+                print("queue empyt")
+                break
+            print(NoI)
+            self.look_around(NoI.get_position())
+            # Add the first node to the closed list and pop it from open list
+            self.__close_list.append(NoI)
+            
             # print("Closed List: ",self.__close_list)
             
     def back_track(self):
@@ -117,26 +131,25 @@ class Maze:
         self.path.append(self.__maze[self.start_goal[-1]])
         while True:
             node = self.path[-1]
-            self.path.append(self.__maze[node.get_parent])
+            self.path.append(self.__maze[tuple(node.get_parent())])
             if(self.path[-1]==self.__maze[self.start_goal[0]]):
                 break
         self.path.reverse()
-        print(list(map(Node.get_position,self.path)))
+        print(list(map(str,map(Node.get_position,self.path))))
+        return self.path
                         
         
     ##Look around the POI
-    def look_around(self,points):
+    def look_around(self,points:np.ndarray):
         #itr through all the possible actions
-        for i in Maze.action_set:
-            ## calc the idx of the cell for a particular action
-            temp = tuple(map(add,points,Maze.action_set[i]))
+        actions = tuple(points+np.array(list(Maze.action_set.values())))
+        for action,key in zip(actions,Maze.action_set.keys()):
             ## Check if the idx is with in maze size
-            if temp[0]>=0 and temp[0]<=Maze.lim_x and temp[1]>=0 and temp[1]<=Maze.lim_y:
+            if action[0]>=0 and action[0]<=Maze.lim_x and action[1]>=0 and action[1]<=Maze.lim_y:
                 ## Check if that element is a Node obj or a None(meaning it is an obstacle)
-                if(self.__maze[(temp)]):
+                if(self.__maze[action[0],action[1]] and not self.__maze[action[0],action[1]].get_is_visited()):
                     ### check if the node is an obstacle
-                    # if(self.__maze[tuple(temp)].get_is_not_obstacle()):
-                    self.add_to_list(points,temp,self.__cost[i])
+                    self.add_to_list(points,action,self.__cost[key])
                     ### First time coming here, check if it is an obstacle
                     # elif(self.point_not_in_obstacle(temp)):
                     #     self.add_to_list(points,temp,self.__cost[i])
@@ -146,19 +159,14 @@ class Maze:
         ## If the cost is lesser than the existing cost 
         child = tuple(child)
         parent = tuple(parent)
-        if(self.__maze[child].get_is_visited()):
-            if(self.__maze[child] in self.__close_list):
-            # print("Present", tuple(child), self.__close_list.index(self.__maze[tuple(child)]))
-                return
         if((self.__maze[parent].get_cost()+cost)<self.__maze[child].get_cost()):
             ## update the cost with the new cost
-            self.__maze[child].set_cost(self.__maze[parent].get_cost()+cost)
+            self.__maze[child].set_cost(cost+self.__maze[parent].get_cost())
             ## Set the new parent of the node
             self.__maze[child].set_parent(parent)
             
-            self.__maze[child].set_is_visited()
             ## Add the node to the open list
-            self.__open_list.append(self.__maze[child])
+            self.__open_list.put(self.__maze[child])
             # print("open list : ",self.__open_list,list(map(Node.get_cost,self.__open_list)))
         
     ## getter for open list
