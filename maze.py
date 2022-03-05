@@ -116,10 +116,6 @@ class Maze:
         self.__open_list.put(self.__maze[goal])
         ##sort list, look around, pop open list and append to closed list
         while True:
-            ## Check for finished condition
-            if(self.__maze[self.start_goal[-1]].get_cost()<NoI.get_cost()):
-                print("Found the shortest path to ",self.__maze[self.start_goal[-1]].get_cartisian())
-                break
             ## Check if there are still nodes to traverse
             if(self.__open_list.empty()):
                 print("Queue empty - no more nodes to explore. Stoping search")
@@ -128,12 +124,19 @@ class Maze:
             NoI = self.__open_list.get()
             NoI.set_is_visited()
             
+            ## Check for finished condition
+            if(self.__maze[self.start_goal[-1]].get_cost()<NoI.get_cost()):
+                print("Found the shortest path to ",self.__maze[self.start_goal[-1]].get_cartisian())
+                break
+            
             if(self.verbose):
                 print(NoI)
             self.look_around(NoI.get_position())
             # Add the first node to the closed list and pop it from open list
             self.__close_list.append(NoI)
         return True
+    
+    
     ## Back track from the goal to the start node to find the path the robot needs to take
     def back_track(self):
         self.path.clear()
@@ -369,7 +372,6 @@ class Maze:
             x,y = i.get_cartisian()
             ax.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors=[0,0,0], color = 'blue')
         plt.title("Maze path using Dijkstra")
-        plt.legend()
         plt.show(block=False)
         plt.pause(5)
         plt.close()
