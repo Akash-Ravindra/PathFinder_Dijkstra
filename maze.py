@@ -1,12 +1,14 @@
 from copy import copy, deepcopy
-from operator import add
+from matplotlib.animation import FuncAnimation
 import numpy as np
 import time
 from shapely.geometry import Polygon,Point
+import matplotlib.pyplot as plt
+import matplotlib.patches as patch
 import math
 from queue import PriorityQueue
-
-from sympy import true
+import tkinter
+import time
 
 '''
 Custom data type to store each node
@@ -56,10 +58,10 @@ class Node:
         return np.equal(self.get_position(),node.get_position()).all()
     '''Overload the str to print the object'''
     def __str__(self) -> str:
-        return "Self: "+str(self.get_position())+" Parent: "+str(self.get_parent())+" Cost: "+str(self.get_cost())
+        return "Self: "+str(self.get_cartisian())+" Parent: "+str(self.get_parent())+" Cost: "+str(self.get_cost())
     '''Overload the str to print the object'''
     def __repr__(self) -> str:
-        return (str(self.get_position()))+'\n'
+        return (str(self.get_cartisian()))+'\n'
     def __gt__(self,value):
         return (self.__attrdict['cost']>value)
     def __lt__(self,value):
@@ -68,17 +70,18 @@ class Node:
 
 class Maze:
     arrow_obstacle = Polygon([(115,210),(80,180),(105,100),(36,185)]) ##The arrow polygon obstacle
-    circle = Point((300,185)).buffer(40)
+    circle_obstacle = Point((300,185)).buffer(40)
+    hexagon_obstacle = Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)])
     action_set = {'u':np.array([-1,0]),'d':np.array([1,0]),\
                   'l':np.array([0,-1]),'r':np.array([0,1]),\
                   'ul':np.array([-1,-1]),'ur':np.array([-1,1]),\
                   'dl':np.array([1,-1]),'dr':np.array([1,1])} ##action set dict, used to append add to the current index
-    lim_x = 249## xlimit in terms of array
-    lim_y = 399## Y limit in terms of array
+    lim_x = 250## xlimit in terms of array
+    lim_y = 400## Y limit in terms of array
+    anime_fig=None
+    fig,ax = None,None
+    scatter=None
     def __init__(self,padding = 5,radius = 0,cost:dict = {'u':1,'d':1,'l':1,'r':1,'ur':1.4,'ul':1.4,'dr':1.4,'dl':1.4}) -> None:
-        self.__maze = np.array([[Node([x,y])for y in range(Maze.lim_y+1)]
-                                for x in range(Maze.lim_x+1)]
-                               ,dtype=Node) ##Empty np array with X*Y Node objects
         self.__cost = cost              ## Cost for each action
         self.__padding = padding+radius ##padding for the robot
         self.__open_list = PriorityQueue()           ##Open list containing the accessable nodes
@@ -87,19 +90,25 @@ class Maze:
         self.start_goal = []
 
     def solve_maze(self,start,goal):
+        print(('-'*50)+"\n\t\tInitializing Maze\n"+('-'*50))
+        self.__maze = np.array([[Node([x,y])for y in range(Maze.lim_y+1)]
+                                for x in range(Maze.lim_x+1)]
+                               ,dtype=Node) ##Empty np array with X*Y Node objects
+        self.update_maze_arrow()
+        self.update_maze_circle()
+        self.update_maze_hexagon()
         start = self.cartisian_to_idx(list(start))
         goal = self.cartisian_to_idx(list(goal))
         self.start_goal.append(start)
         self.start_goal.append(goal)
-        self.update_maze_arrow()
-        self.update_maze_circle()
         ## Check if the start and goal are accessable
-        if(type(self.__maze[start])==None):
-            print("Start inside a Obstacle")
+        if(type(self.__maze[start])==type(None) or self.start_goal[0][0]<0 or self.start_goal[0][0]>Maze.lim_x or self.start_goal[0][1]>Maze.lim_y or self.start_goal[0][1]<0 ):
+            print("Start inside a Obstacle or out of bounds")
             return False
-        if(type(self.__maze[goal])==None):
-            print("Goal inside a Obstacle")
+        if(type(self.__maze[goal])==type(None) or self.start_goal[-1][0]<0 or self.start_goal[-1][0]>Maze.lim_x or self.start_goal[-1][1]>Maze.lim_y or self.start_goal[-1][1]<0):
+            print("Goal inside a Obstacle or out of bounds")
             return False
+        print(('-'*50)+"\n\t\tStarting search\n"+('-'*50))
         ## Set the cost of the start node to zero
         self.__maze[start].set_cost(0)
         ## Apppend the start node and end node into list
@@ -107,27 +116,27 @@ class Maze:
         self.__open_list.put(self.__maze[goal])
         ##sort list, look around, pop open list and append to closed list
         while True:
-            # sort the open list so that lowest cost in at idx 0
-            # self.__open_list.sort()
-            # print("Open : ",self.__open_list,list(map(Node.get_cost,self.__open_list)))
+
             # look around the first node in the open list
             NoI = self.__open_list.get()
             NoI.set_is_visited()
             if(self.__maze[self.start_goal[-1]].get_cost()<NoI.get_cost()):
-                print("Found the shortest path")
+                print("Found the shortest path to ",self.__maze[self.start_goal[-1]].get_cartisian())
                 break
             if(self.__open_list.empty()):
-                print("queue empyt")
+                print("Queue empty - no more nodes to explore")
                 break
             print(NoI)
             self.look_around(NoI.get_position())
             # Add the first node to the closed list and pop it from open list
             self.__close_list.append(NoI)
-            
-            # print("Closed List: ",self.__close_list)
+        return True
             
     def back_track(self):
         self.path.clear()
+        if(self.__maze[self.start_goal[-1]].get_cost()==np.inf or self.__maze[self.start_goal[-1]].get_parent() is None):
+            print("No path from Start to goal")
+            return False
         self.path.append(self.__maze[self.start_goal[-1]])
         while True:
             node = self.path[-1]
@@ -135,7 +144,7 @@ class Maze:
             if(self.path[-1]==self.__maze[self.start_goal[0]]):
                 break
         self.path.reverse()
-        print(list(map(str,map(Node.get_position,self.path))))
+        print(list(map(str,map(Node.get_cartisian,self.path))))
         return self.path
                         
         
@@ -151,8 +160,7 @@ class Maze:
                     ### check if the node is an obstacle
                     self.add_to_list(points,action,self.__cost[key])
                     ### First time coming here, check if it is an obstacle
-                    # elif(self.point_not_in_obstacle(temp)):
-                    #     self.add_to_list(points,temp,self.__cost[i])
+                  
         
     ## Add to open list and update node parameters
     def add_to_list(self,parent,child,cost):
@@ -202,10 +210,15 @@ class Maze:
         xy[0] = abs(xy[0]-Maze.lim_x)
         return (xy[0],xy[1])
 
+    def cartisian_to_game(self, xy):
+        xy = list(xy)
+        xy[1] = abs(xy[1]-Maze.lim_x)
+        return (xy[0],xy[1])
+    
     ## Defines a circle and checks if the idx is within the given circle
     def _is_in_circle(self,idx,radius=40,center=(300,185)):
         point_geom = Point(idx)
-        return Maze.circle.intersects(point_geom)
+        return Maze.circle_obstacle.intersects(point_geom)
     
     ## Defines a arrow and checks if the idx is within the given arrow
     def _is_in_arrow(self,idx):
@@ -213,14 +226,14 @@ class Maze:
         return Maze.arrow_obstacle.intersects(point_geom)
     
     ## Defines a hexagon and checks if the idx is within the given hexagon
-    def _is_in_hexagon(self,center=(200,100),side=35):
-        return False
-        pass
+    def _is_in_hexagon(self,idx):
+        point_geom = Point((idx))
+        return Maze.hexagon_obstacle.intersects(point_geom)
     
     def update_maze_circle(self):
-        coords = Maze.circle.buffer(5).bounds
+        coords = Maze.circle_obstacle.buffer(5).bounds
         start = ((math.floor(coords[0]),math.floor(coords[1])))
-        end = ((math.floor(coords[2]),math.floor(coords[3])))
+        end = ((math.ceil(coords[2]),math.ceil(coords[3])))
         
         x,y = np.ogrid[start[0]:end[0],start[1]:end[1]]
         
@@ -237,7 +250,7 @@ class Maze:
     def update_maze_arrow(self):
         coords = Maze.arrow_obstacle.buffer(5).bounds
         start = ((math.floor(coords[0]),math.floor(coords[1])))
-        end = ((math.floor(coords[2]),math.floor(coords[3])))
+        end = ((math.ceil(coords[2]),math.ceil(coords[3])))
         
         x,y = np.ogrid[start[0]:end[0],start[1]:end[1]]
         
@@ -249,3 +262,104 @@ class Maze:
                     idx,idy = self.cartisian_to_idx((xi,yi))
                     self.__maze[idx-padding:idx+padding,idy-padding:idy+padding] = None 
         pass
+    
+    def update_maze_hexagon(self):
+        coords = Maze.hexagon_obstacle.buffer(5).bounds
+        start = ((math.floor(coords[0]),math.floor(coords[1])))
+        end = ((math.ceil(coords[2]),math.ceil(coords[3])))
+        
+        x,y = np.ogrid[start[0]:end[0],start[1]:end[1]]
+        
+        x = x.T
+        padding = int(self.__padding)
+        for yi in y[0]:
+            for xi in x[0]:
+                if self._is_in_hexagon((xi,yi)):
+                    idx,idy = self.cartisian_to_idx((xi,yi))
+                    self.__maze[idx-padding:idx+padding,idy-padding:idy+padding] = None 
+        pass
+    
+    
+    def animate_graph(self, i):
+        if i==0:
+            return
+        for j in range((i-1)*1000,(1000*i)):
+            x,y = self.__close_list[j].get_position()
+            x,y = self.idx_to_cartisian((x,y))
+            plt.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors='red', color = 'white')
+        return self.scatter
+        
+    def start_plot(self):
+        # plt.cla()
+        arrow = patch.Polygon([[115,210],[80,180],[105,100],[36,185]],color='red')
+        circle = patch.Circle([300,185],40,color='red')
+        Hexagon = patch.Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)],color="red")
+        self.fig,self.ax = plt.subplots(figsize=(20,10))
+        self.ax.add_patch(arrow)
+        self.ax.add_patch(circle)
+        self.ax.add_patch(Hexagon)
+        self.ax.set_facecolor('black')
+
+        self.ax.set(xlim=(0,self.lim_y),ylim=(0,self.lim_x))
+        
+        self.scatter = self.ax.scatter([],[],s=1,marker="s",linewidths=0.25,edgecolors='red', color = 'white')
+        self.anime_fig = FuncAnimation(plt.gcf(),self.animate_graph,interval=0.01,frames=len(self.__close_list)-1)
+        # self.anime_fig.save('animation.gif',writer='pillow')
+        self.fig.tight_layout()
+        self.fig.show()
+        
+    def game_plot(self):
+        window_width = 400
+        window_height = 250
+        Window = tkinter.Tk()
+        Window.title("Python Guides")
+        Window.geometry('400x250')
+        canvas = tkinter.Canvas(Window)
+        canvas.configure(bg="Black")
+        animation_refresh_seconds = 0.00001
+        canvas.pack(fill="both", expand=True)
+        # p1,p2,p3,p4 =[0,0],[400,0],[400,250],[0,250]
+        # canvas.create_polygon(p1,p2,p3,p4,fill='black', outline='White',width=1)
+        img = tkinter.PhotoImage(width=window_width,height=window_height)
+        canvas.create_image((window_width/2,window_height/2),image = img)
+        p1,p2,p3,p4 = self.cartisian_to_game([115,210]),\
+                        self.cartisian_to_game([80,180]),\
+                        self.cartisian_to_game([105,100]),\
+                        self.cartisian_to_game([36,185]) ##Arrow Coordinates
+        canvas.create_polygon(p1,p2,p3,p4,fill='Red', outline='White',width=1) ##Arrow 
+        p1,p2,p3,p4,p5,p6 = self.cartisian_to_game([200,59.58]),\
+                            self.cartisian_to_game([165,79.7925]),\
+                            self.cartisian_to_game([165,120.2075]),\
+                            self.cartisian_to_game([200,140.415]),\
+                            self.cartisian_to_game([235,120.2075]),\
+                            self.cartisian_to_game([235,79.7925])
+        canvas.create_polygon(p1,p2,p3,p4,p5,p6,fill='Red', outline='White',width=1)#Hexagon
+        p1,radius = self.cartisian_to_game([300,185]),40
+        x,y = p1
+        canvas.create_oval(x-radius,y-radius,x+radius,y+radius,fill='Red', outline='White',width=1)
+        for i in range(len(self.__close_list)-1):
+            img.put("#ffffff",(self.cartisian_to_game(self.__close_list[i].get_cartisian())))
+            Window.update()
+            time.sleep(animation_refresh_seconds)
+        animation_refresh_seconds = 0.001
+        for i in range(len(self.path)):
+            img.put('#%02x%02x%02x ' % (127,127,0),(self.cartisian_to_game(self.path[i].get_cartisian())))
+            Window.update()
+            time.sleep(animation_refresh_seconds)
+        time.sleep(5)
+        Window.destroy()
+            
+    def simple_plot_path(self):
+        arrow = patch.Polygon([[115,210],[80,180],[105,100],[36,185]])
+        circle = patch.Circle([300,185],40)
+        Hexagon = patch.Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)],color="red")
+        fig,ax = plt.subplots()
+        ax.add_patch(arrow)
+        ax.add_patch(circle)
+        ax.add_patch(Hexagon)
+        plt.xlim((0,Maze.lim_y))
+        plt.ylim((0,Maze.lim_x))
+        for i in self.path:
+            x,y = i.get_cartisian()
+            plt.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors=[0,0,0], color = 'blue')
+        plt.show()
