@@ -1,7 +1,6 @@
 # PathFinder_Dijkstra
 
 ## Requirements
-- shapely - shapely=1.7.1=py39h1728cc4_0
 - tkinter - tk=8.6.10=hbc83047_0
 - numpy
 - matplotlib

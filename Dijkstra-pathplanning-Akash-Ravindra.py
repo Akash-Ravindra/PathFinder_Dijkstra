@@ -1,7 +1,4 @@
 from maze import Maze
-from matplotlib import pyplot as plt
-from matplotlib.patches import Circle, Wedge, Polygon
-from matplotlib.animation import FuncAnimation
 import numpy as np
 import argparse
 
