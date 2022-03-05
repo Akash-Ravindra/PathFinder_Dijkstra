@@ -6,7 +6,6 @@ import matplotlib.patches as patch
 import math
 from queue import PriorityQueue
 import tkinter
-import time
 
 '''
 Custom data type to store each node
@@ -287,7 +286,7 @@ class Maze:
         window_width = 400
         window_height = 250
         Window = tkinter.Tk()
-        Window.title("Python Guides")
+        Window.title("Maze Path Visualization")
         Window.geometry('400x250')
         canvas = tkinter.Canvas(Window)
         canvas.configure(bg="Black")
@@ -330,18 +329,25 @@ class Maze:
         Window.destroy()
             
     def simple_plot_path(self):
-        arrow = patch.Polygon([[115,210],[80,180],[105,100],[36,185]])
-        circle = patch.Circle([300,185],40)
+        arrow = patch.Polygon([[115,210],[80,180],[105,100],[36,185]],color="red")
+        circle = patch.Circle([300,185],40,color="red")
         Hexagon = patch.Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)],color="red")
         fig,ax = plt.subplots()
+        ax.set_facecolor((0,0,0))
         ax.add_patch(arrow)
         ax.add_patch(circle)
         ax.add_patch(Hexagon)
+        fig.canvas.toolbar_visible = False
+        fig.canvas.header_visible = False
+        fig.canvas.footer_visible = False
+        ax.grid(False)
         plt.xlim((0,Maze.lim_y))
         plt.ylim((0,Maze.lim_x))
         for i in self.path:
             x,y = i.get_cartisian()
-            plt.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors=[0,0,0], color = 'blue')
+            ax.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors=[0,0,0], color = 'blue')
+        plt.title("Maze path using Dijkstra")
+        plt.legend()
         plt.show(block=False)
         plt.pause(5)
         plt.close()

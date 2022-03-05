@@ -1,4 +1,3 @@
-# %%
 from maze import Maze
 from matplotlib import pyplot as plt
 from matplotlib.patches import Circle, Wedge, Polygon
@@ -9,7 +8,7 @@ import argparse
 
 
 def get_inputs():
-    parser = argparse.ArgumentParser(description='Finds the path from start to goal using Dijkstra\'s algorithm',usage='\t\t\tpython main.py -x0 100 -y0 50 -x1 400 -y1 250\t\t\tSilent Operation\n\t\t\tpython main.py -x0 100 -y0 50 -x1 400 -y1 250 --output\t\tVerbose Operation ',)
+    parser = argparse.ArgumentParser(description='Finds the path from start to goal using Dijkstra\'s algorithm',usage='\t\t\tpython %(prog)s -x0 100 -y0 50 -x1 400 -y1 250\t\t\tSilent Operation\n\t\t\tpython %(prog)s -x0 100 -y0 50 -x1 400 -y1 250 --output\t\tVerbose Operation ',)
     parser.add_argument('-x0', type=np.int0, default=0, help="The x coordinate of the Start Node")
     parser.add_argument('-y0', type=np.int0, default=0, help="The y coordinate of the Start Node")
     parser.add_argument('-x1', type=np.int0, default=400, help="The x coordinate of the Goal Node")
