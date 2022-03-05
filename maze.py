@@ -67,8 +67,8 @@ class Node:
 
 class Maze:
     arrow_obstacle = Polygon([(115,210),(80,180),(105,100),(36,185)]) ##The arrow polygon obstacle
-    circle_obstacle = Point((300,185)).buffer(40)
-    hexagon_obstacle = Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)])
+    circle_obstacle = Point((300,185)).buffer(40) ##The Circle obstacle
+    hexagon_obstacle = Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)]) ##The hexagon polygon obstacle
     action_set = {'u':np.array([-1,0]),'d':np.array([1,0]),\
                   'l':np.array([0,-1]),'r':np.array([0,1]),\
                   'ul':np.array([-1,-1]),'ur':np.array([-1,1]),\
@@ -92,9 +92,11 @@ class Maze:
         self.__maze = np.array([[Node([x,y])for y in range(Maze.lim_y+1)]
                                 for x in range(Maze.lim_x+1)]
                                ,dtype=Node) ##Empty np array with X*Y Node objects
+        ## Update the maze array with the presence of the obstacles
         self.update_maze_arrow()
         self.update_maze_circle()
         self.update_maze_hexagon()
+        ## Convert the cartisian coordinates to array frame
         start = self.cartisian_to_idx(list(start))
         goal = self.cartisian_to_idx(list(goal))
         self.start_goal.append(start)
@@ -114,35 +116,41 @@ class Maze:
         self.__open_list.put(self.__maze[goal])
         ##sort list, look around, pop open list and append to closed list
         while True:
-
-            # look around the first node in the open list
-            NoI = self.__open_list.get()
-            NoI.set_is_visited()
+            ## Check for finished condition
             if(self.__maze[self.start_goal[-1]].get_cost()<NoI.get_cost()):
                 print("Found the shortest path to ",self.__maze[self.start_goal[-1]].get_cartisian())
                 break
+            ## Check if there are still nodes to traverse
             if(self.__open_list.empty()):
                 print("Queue empty - no more nodes to explore. Stoping search")
                 break
+            # look around the first node in the open list
+            NoI = self.__open_list.get()
+            NoI.set_is_visited()
+            
             if(self.verbose):
                 print(NoI)
             self.look_around(NoI.get_position())
             # Add the first node to the closed list and pop it from open list
             self.__close_list.append(NoI)
         return True
-            
+    ## Back track from the goal to the start node to find the path the robot needs to take
     def back_track(self):
         self.path.clear()
+        ## Check if the goal was reached
         if(self.__maze[self.start_goal[-1]].get_cost()==np.inf or self.__maze[self.start_goal[-1]].get_parent() is None):
             print("No path from Start to goal")
             return False
+        
         print("\n""\n""\n"+('-'*50)+"\n\t\tStarting BackTrack\n"+('-'*50)+"\n")
+        ## Iteratively access the parents for each child node
         self.path.append(self.__maze[self.start_goal[-1]])
         while True:
             node = self.path[-1]
             self.path.append(self.__maze[tuple(node.get_parent())])
             if(self.path[-1]==self.__maze[self.start_goal[0]]):
                 break
+        ## Flip the array as it have the order from goal to start
         self.path.reverse()
         if(self.verbose):
             print(list(map(str,map(Node.get_cartisian,self.path))))
@@ -211,7 +219,7 @@ class Maze:
         xy[0],xy[1] = xy[1],xy[0]
         xy[0] = abs(xy[0]-Maze.lim_x)
         return (xy[0],xy[1])
-
+    ## HELPER, converts cartisian to tkinter coordinates, top left corner is 0,0 , top right corner is 400,0
     def cartisian_to_game(self, xy):
         xy = list(xy)
         xy[1] = abs(xy[1]-Maze.lim_x)
@@ -231,16 +239,18 @@ class Maze:
     def _is_in_hexagon(self,idx):
         point_geom = Point((idx))
         return Maze.hexagon_obstacle.intersects(point_geom)
-    
+    ## Check each element of the maze that falls in the bounding box of the obstacle 
     def update_maze_circle(self):
+        ## Bounding box
         coords = Maze.circle_obstacle.buffer(5).bounds
         start = ((math.floor(coords[0]),math.floor(coords[1])))
         end = ((math.ceil(coords[2]),math.ceil(coords[3])))
-        
+        ## Permutation of coordinates
         x,y = np.ogrid[start[0]:end[0],start[1]:end[1]]
         
         x = x.T
         padding = int(self.__padding)
+        ## Remove nodes that are in the obstacle +padding in all directions
         for yi in y[0]:
             for xi in x[0]:
                 if self._is_in_circle((xi,yi)):
@@ -248,7 +258,7 @@ class Maze:
                     self.__maze[idx-padding:idx+padding,idy-padding:idy+padding] = None 
         pass
     
-    
+    ## Check each element of the maze that falls in the bounding box of the obstacle 
     def update_maze_arrow(self):
         coords = Maze.arrow_obstacle.buffer(5).bounds
         start = ((math.floor(coords[0]),math.floor(coords[1])))
@@ -258,13 +268,14 @@ class Maze:
         
         x = x.T
         padding = int(self.__padding)
+        # Remove nodes that are in the obstacle +padding in all directions
         for yi in y[0]:
             for xi in x[0]:
                 if self._is_in_arrow((xi,yi)):
                     idx,idy = self.cartisian_to_idx((xi,yi))
                     self.__maze[idx-padding:idx+padding,idy-padding:idy+padding] = None 
         pass
-    
+    ## Check each element of the maze that falls in the bounding box of the obstacle 
     def update_maze_hexagon(self):
         coords = Maze.hexagon_obstacle.buffer(5).bounds
         start = ((math.floor(coords[0]),math.floor(coords[1])))
@@ -274,6 +285,7 @@ class Maze:
         
         x = x.T
         padding = int(self.__padding)
+        # Remove nodes that are in the obstacle +padding in all directions
         for yi in y[0]:
             for xi in x[0]:
                 if self._is_in_hexagon((xi,yi)):
@@ -281,19 +293,22 @@ class Maze:
                     self.__maze[idx-padding:idx+padding,idy-padding:idy+padding] = None 
         pass
     
-        
+    # Plot the completed path as an animation
     def game_plot(self):
+        ## Define the size of the window
         window_width = 400
         window_height = 250
+        ## The root object
         Window = tkinter.Tk()
         Window.title("Maze Path Visualization")
         Window.geometry('400x250')
+        ## The main canvas object where all the objects are drawn
         canvas = tkinter.Canvas(Window)
         canvas.configure(bg="Black")
+        ## Refresh rate
         animation_refresh_seconds = 0.00001
         canvas.pack(fill="both", expand=True)
-        # p1,p2,p3,p4 =[0,0],[400,0],[400,250],[0,250]
-        # canvas.create_polygon(p1,p2,p3,p4,fill='black', outline='White',width=1)
+        ## The image element used to update the searched nodes
         img = tkinter.PhotoImage(width=window_width,height=window_height)
         canvas.create_image((window_width/2,window_height/2),image = img)
         p1,p2,p3,p4 = self.cartisian_to_game([115,210]),\
@@ -308,30 +323,36 @@ class Maze:
                             self.cartisian_to_game([235,120.2075]),\
                             self.cartisian_to_game([235,79.7925])
         canvas.create_polygon(p1,p2,p3,p4,p5,p6,fill='Red', outline='Blue',width=1)#Hexagon
-        p1,radius = self.cartisian_to_game([300,185]),40
+        p1,radius = self.cartisian_to_game([300,185]),40 # circle
         x,y = p1
-        canvas.create_oval(x-radius,y-radius,x+radius,y+radius,fill='Red', outline='Blue',width=0.5)
+        canvas.create_oval(x-radius,y-radius,x+radius,y+radius,fill='Red', outline='Blue',width=0.5)#circle
+        ## For each element of closed list, color the image, this is the order in which they were explored
         for i in range(len(self.__close_list)-1):
             img.put("#ffffff",(self.cartisian_to_game(self.__close_list[i].get_cartisian())))
             Window.update()
             time.sleep(animation_refresh_seconds)
+        ## Draw the path of the found by the algorithm
         animation_refresh_seconds = 0.001
         start = self.cartisian_to_game(self.__close_list[0].get_cartisian())
         goal = self.cartisian_to_game(self.__close_list[-1].get_cartisian())
         radius = 2
+        ## Circles to define the start and end node
         canvas.create_oval(start[0]-radius,start[1]-radius,start[0]+radius,start[1]+radius, fill = 'Orange')
         canvas.create_oval(goal[0]-radius,goal[1]-radius,goal[0]+radius,goal[1]+radius, fill = 'Green')
+        ## Iterate over all the ndoes in the path and color them in
         for i in range(len(self.path)):
             img.put("#00ff00",(self.cartisian_to_game(self.path[i].get_cartisian())))
             Window.update()
             time.sleep(animation_refresh_seconds)
         time.sleep(5)
         Window.destroy()
-            
+    # A simple scatter plot to see the path taken by the robot
     def simple_plot_path(self):
+        ## Create the obstacles
         arrow = patch.Polygon([[115,210],[80,180],[105,100],[36,185]],color="red")
         circle = patch.Circle([300,185],40,color="red")
         Hexagon = patch.Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)],color="red")
+        ## Add the patches to the ax
         fig,ax = plt.subplots()
         ax.set_facecolor((0,0,0))
         ax.add_patch(arrow)
@@ -343,6 +364,7 @@ class Maze:
         ax.grid(False)
         plt.xlim((0,Maze.lim_y))
         plt.ylim((0,Maze.lim_x))
+        # plot each of the points on the graph
         for i in self.path:
             x,y = i.get_cartisian()
             ax.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors=[0,0,0], color = 'blue')
