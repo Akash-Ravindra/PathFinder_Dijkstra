@@ -1,5 +1,3 @@
-from copy import copy, deepcopy
-from matplotlib.animation import FuncAnimation
 import numpy as np
 import time
 from shapely.geometry import Polygon,Point
@@ -81,13 +79,14 @@ class Maze:
     anime_fig=None
     fig,ax = None,None
     scatter=None
-    def __init__(self,padding = 5,radius = 0,cost:dict = {'u':1,'d':1,'l':1,'r':1,'ur':1.4,'ul':1.4,'dr':1.4,'dl':1.4}) -> None:
+    def __init__(self,padding = 5,radius = 0,cost:dict = {'u':1,'d':1,'l':1,'r':1,'ur':1.4,'ul':1.4,'dr':1.4,'dl':1.4},verbose=True) -> None:
         self.__cost = cost              ## Cost for each action
         self.__padding = padding+radius ##padding for the robot
         self.__open_list = PriorityQueue()           ##Open list containing the accessable nodes
         self.__close_list = []          ##closed list containing the visited nodes
         self.path = []
         self.start_goal = []
+        self.verbose = verbose
 
     def solve_maze(self,start,goal):
         print(('-'*50)+"\n\t\tInitializing Maze\n"+('-'*50))
@@ -124,9 +123,10 @@ class Maze:
                 print("Found the shortest path to ",self.__maze[self.start_goal[-1]].get_cartisian())
                 break
             if(self.__open_list.empty()):
-                print("Queue empty - no more nodes to explore")
+                print("Queue empty - no more nodes to explore. Stoping search")
                 break
-            print(NoI)
+            if(self.verbose):
+                print(NoI)
             self.look_around(NoI.get_position())
             # Add the first node to the closed list and pop it from open list
             self.__close_list.append(NoI)
@@ -137,6 +137,7 @@ class Maze:
         if(self.__maze[self.start_goal[-1]].get_cost()==np.inf or self.__maze[self.start_goal[-1]].get_parent() is None):
             print("No path from Start to goal")
             return False
+        print("\n""\n""\n"+('-'*50)+"\n\t\tStarting BackTrack\n"+('-'*50)+"\n")
         self.path.append(self.__maze[self.start_goal[-1]])
         while True:
             node = self.path[-1]
@@ -144,7 +145,9 @@ class Maze:
             if(self.path[-1]==self.__maze[self.start_goal[0]]):
                 break
         self.path.reverse()
-        print(list(map(str,map(Node.get_cartisian,self.path))))
+        if(self.verbose):
+            print(list(map(str,map(Node.get_cartisian,self.path))))
+        print(('-'*50)+"\n\t\tBackTrack Complete\n"+('-'*50)+"\n")            
         return self.path
                         
         
@@ -279,34 +282,6 @@ class Maze:
                     self.__maze[idx-padding:idx+padding,idy-padding:idy+padding] = None 
         pass
     
-    
-    def animate_graph(self, i):
-        if i==0:
-            return
-        for j in range((i-1)*1000,(1000*i)):
-            x,y = self.__close_list[j].get_position()
-            x,y = self.idx_to_cartisian((x,y))
-            plt.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors='red', color = 'white')
-        return self.scatter
-        
-    def start_plot(self):
-        # plt.cla()
-        arrow = patch.Polygon([[115,210],[80,180],[105,100],[36,185]],color='red')
-        circle = patch.Circle([300,185],40,color='red')
-        Hexagon = patch.Polygon([(200,59.58),(165,79.7925),(165,120.2075),(200,140.415),(235,120.2075),(235,79.7925)],color="red")
-        self.fig,self.ax = plt.subplots(figsize=(20,10))
-        self.ax.add_patch(arrow)
-        self.ax.add_patch(circle)
-        self.ax.add_patch(Hexagon)
-        self.ax.set_facecolor('black')
-
-        self.ax.set(xlim=(0,self.lim_y),ylim=(0,self.lim_x))
-        
-        self.scatter = self.ax.scatter([],[],s=1,marker="s",linewidths=0.25,edgecolors='red', color = 'white')
-        self.anime_fig = FuncAnimation(plt.gcf(),self.animate_graph,interval=0.01,frames=len(self.__close_list)-1)
-        # self.anime_fig.save('animation.gif',writer='pillow')
-        self.fig.tight_layout()
-        self.fig.show()
         
     def game_plot(self):
         window_width = 400
@@ -326,24 +301,29 @@ class Maze:
                         self.cartisian_to_game([80,180]),\
                         self.cartisian_to_game([105,100]),\
                         self.cartisian_to_game([36,185]) ##Arrow Coordinates
-        canvas.create_polygon(p1,p2,p3,p4,fill='Red', outline='White',width=1) ##Arrow 
+        canvas.create_polygon(p1,p2,p3,p4,fill='Red', outline='Blue',width=1) ##Arrow 
         p1,p2,p3,p4,p5,p6 = self.cartisian_to_game([200,59.58]),\
                             self.cartisian_to_game([165,79.7925]),\
                             self.cartisian_to_game([165,120.2075]),\
                             self.cartisian_to_game([200,140.415]),\
                             self.cartisian_to_game([235,120.2075]),\
                             self.cartisian_to_game([235,79.7925])
-        canvas.create_polygon(p1,p2,p3,p4,p5,p6,fill='Red', outline='White',width=1)#Hexagon
+        canvas.create_polygon(p1,p2,p3,p4,p5,p6,fill='Red', outline='Blue',width=1)#Hexagon
         p1,radius = self.cartisian_to_game([300,185]),40
         x,y = p1
-        canvas.create_oval(x-radius,y-radius,x+radius,y+radius,fill='Red', outline='White',width=1)
+        canvas.create_oval(x-radius,y-radius,x+radius,y+radius,fill='Red', outline='Blue',width=0.5)
         for i in range(len(self.__close_list)-1):
             img.put("#ffffff",(self.cartisian_to_game(self.__close_list[i].get_cartisian())))
             Window.update()
             time.sleep(animation_refresh_seconds)
         animation_refresh_seconds = 0.001
+        start = self.cartisian_to_game(self.__close_list[0].get_cartisian())
+        goal = self.cartisian_to_game(self.__close_list[-1].get_cartisian())
+        radius = 2
+        canvas.create_oval(start[0]-radius,start[1]-radius,start[0]+radius,start[1]+radius, fill = 'Orange')
+        canvas.create_oval(goal[0]-radius,goal[1]-radius,goal[0]+radius,goal[1]+radius, fill = 'Green')
         for i in range(len(self.path)):
-            img.put('#%02x%02x%02x ' % (127,127,0),(self.cartisian_to_game(self.path[i].get_cartisian())))
+            img.put("#00ff00",(self.cartisian_to_game(self.path[i].get_cartisian())))
             Window.update()
             time.sleep(animation_refresh_seconds)
         time.sleep(5)
@@ -362,4 +342,6 @@ class Maze:
         for i in self.path:
             x,y = i.get_cartisian()
             plt.scatter(x,y,s=1,marker="s",linewidths=0.25,edgecolors=[0,0,0], color = 'blue')
-        plt.show()
+        plt.show(block=False)
+        plt.pause(5)
+        plt.close()
